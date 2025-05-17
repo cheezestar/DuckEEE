@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ESP32_Rover_Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="/nipplejs.min.js"></script>
+  <style>
+    html,body {
+      height: 100%;
+      margin: 0;
+      background: #fcf47f;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-family: Arial;
+    }
+
+    h1 {
+      color: blue;
+      text-align: center;
+      margin-top: 5px;
+      position: absolute;
+      top: 30px;
+    }
+
+    #Data_table{
+      position: absolute;
+      right: 100px ;
+      top: 150px;
+      color: blue; 
+    }
+
+    #Reset_Button{
+      top: 100px;
+      right: 350px;
+      position: absolute;
+      size: 50px;
+    }
+
+    #Read_Button{
+      top: 100px;
+      right: 280px;
+      position:absolute;
+      size: 50px;
+    }
+
+    #joystickZone {
+      width: 450px;
+      height: 450px;
+      margin: 40px auto;
+      background: #eeeeee00;
+      border-radius: 50%;
+      position: absolute; 
+      left: 50px; 
+      bottom: 20px;
+    }
+
+  </style>
+</head>
+<body>
+  <h1>ESP32_Rover_Control</h1>
+
+  <table id="Data_table" border="1"> 
+    <thead>
+      <tr>
+        <th>Radio</th>
+        <th>Infared</th>
+        <th>Magnet</th>
+        <th>Species?</th>
+        <th>Ultrasound(name)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <button id="Reset_Button" onclick="resetTable()" >Reset!</button>
+  <button id="Read_Button" onclick="readButton()" >Read!</button>
+  
+  
+  <div id="joystickZone"></div>
+
+  <script>  
+    function readButton(){
+      fetch('/read_data')
+        .then(response => response.text())
+        .then(queryString => {
+          const params = new URLSearchParams(queryString);
+
+          const radio = params.get('radio');
+          const infared = params.get('infared');
+          const magnetic = params.get('magnetic');
+          const species = params.get('species');
+          const name = params.get('name')
+
+          console.log('Radio:', radio);
+          console.log('Infared:', infared);
+          console.log('Magnetic:', magnetic);
+          console.log('Species:', species);
+          console.log('Name:', name)
+
+          const table = document.querySelector("#Data_table tbody");
+          const row = document.createElement("tr");
+
+          row.innerHTML = `
+          <td>${radio}</td>
+          <td>${infared}</td>
+          <td>${magnetic}</td>
+          <td>${species}</td>
+          <td>${name}</td>
+        `;
+
+           table.appendChild(row);
+           console.log('Table row added!')
+
+      })
+        .catch(error => {
+          console.error('Error:', error);
+        });
+    }
+    function resetTable() {
+      const tbody = document.querySelector("#Data_table tbody");
+      tbody.innerHTML = ''; // Removes all rows in tbody
+      console.log('Table reset!');
+    }
+
+
+    
+    const joystick = nipplejs.create({
+      zone: document.getElementById('joystickZone'),
+      mode: 'static',
+      position: { left: '50%', top: '50%' },
+      color: 'blue',
+      size: 300
+    });
+
+    joystick.on('move', function (evt, data) {
+      if (data && data.vector) {
+        const x = Math.round(data.vector.x * 255);
+        const y = Math.round(data.vector.y * 255);
+        // Send joystick data to ESP32
+        fetch(`/joystick?x=${x}&y=${y}`).catch(err => console.error(err))
+      }
+    });
+
+     joystick.on('end', function () {
+      const interval = setInterval(() => {
+        fetch('/joystick?x=0&y=0')
+          .then(res => res.text())
+          .then(text => {
+            console.log("Response:", text);
+            if (text.includes("stopped")) {
+              clearInterval(interval); // Exit loop
+            }
+          })
+          .catch(err => {
+            console.error("Fetch error:", err);
+            clearInterval(interval); // Exit on failure too
+          });
+      }, 
+      50); 
+    });
+  </script>
+</body>
+</html>
